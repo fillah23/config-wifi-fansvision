@@ -184,11 +184,27 @@
                                 <div class="col-md-6 mb-3">
                                     <label for="pppoe_username" class="form-label">PPPoE Username</label>
                                     <input type="text" class="form-control" id="pppoe_username" name="pppoe_username" required>
+                                    <div class="form-text">
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle"></i> 
+                                            Input username sesuai kebutuhan (tidak menggunakan format otomatis)
+                                        </small>
+                                    </div>
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label for="pppoe_password" class="form-label">PPPoE Password</label>
                                     <input type="text" class="form-control" id="pppoe_password" name="pppoe_password" required>
                                 </div>
+                            </div>
+
+                            <div class="alert alert-info">
+                                <h6><i class="fas fa-cog me-2"></i>Configuration Features:</h6>
+                                <ul class="mb-0 small">
+                                    <li><strong>Dual VLAN:</strong> Service VLAN ({profile}) + Default VLAN 100 for ACS</li>
+                                    <li><strong>TR069/ACS:</strong> Auto-configured for remote management</li>
+                                    <li><strong>Username:</strong> Manual input (no auto-format)</li>
+                                    <li><strong>VEIP Mode:</strong> Hybrid mode for advanced features</li>
+                                </ul>
                             </div>
 
                             <div class="d-grid gap-2">

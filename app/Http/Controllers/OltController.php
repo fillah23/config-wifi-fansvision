@@ -1053,15 +1053,31 @@ class OltController extends Controller
         $this->executeCommand($connection, 'tcont 1 name PPPoE profile 1000MBPS', false);
         $this->executeCommand($connection, 'gemport 1 name PPPoE tcont 1', false);
         $this->executeCommand($connection, 'gemport 1 traffic-limit upstream UP1000MBPS downstream DW1000MBPS', false);
+        
+        // Service ports - VLAN sesuai profile dan VLAN 100 default untuk ACS
         $this->executeCommand($connection, "service-port 1 vport 1 user-vlan {$vlan} vlan {$vlan}", false);
-        $this->executeCommand($connection, 'port-identification format DSL-FORUM-PON sport 1', false);
-        $this->executeCommand($connection, 'pppoe-intermediate-agent enable sport 1', false);
+        $this->executeCommand($connection, "service-port 2 vport 1 user-vlan 100 vlan 100", false);
         $this->executeCommand($connection, 'exit');
 
         // Step 3: Configure ONU management (batch mode)
         $this->executeCommand($connection, "pon-onu-mng gpon-onu_1/{$card}/{$port}:{$onuId}", false);
+        
+        // Services - PPPoE dan ACS
         $this->executeCommand($connection, "service PPPoE gemport 1 vlan {$vlan}", false);
+        $this->executeCommand($connection, "service ACS gemport 1 vlan 100", false);
+        
+        // WAN IP configuration dengan username yang diinput user
         $this->executeCommand($connection, "wan-ip 1 mode pppoe username {$pppoeUsername} password {$pppoePassword} vlan-profile {$vlanProfile} host 1", false);
+        
+        // VLAN port configuration untuk VEIP
+        $this->executeCommand($connection, 'vlan port veip_1 mode hybrid', false);
+        
+        // TR069/ACS Management configuration
+        $this->executeCommand($connection, 'tr069-mgmt 1 state unlock', false);
+        $this->executeCommand($connection, 'tr069-mgmt 1 acs http://10.133.254.2:7547 validate basic username fansnetwork password acsfans', false);
+        $this->executeCommand($connection, 'tr069-mgmt 1 tag pri 0 vlan 100', false);
+        
+        // Network management settings
         $this->executeCommand($connection, 'wan-ip 1 ping-response enable traceroute-response enable', false);
         $this->executeCommand($connection, 'security-mgmt 1 state enable mode forward protocol web', false);
         $this->executeCommand($connection, 'end', false);
@@ -1069,7 +1085,7 @@ class OltController extends Controller
         // Only wait for final command
         $this->executeCommand($connection, 'write');
         
-        Log::info("Fast ONU configuration completed for ONU {$onuId}");
+        Log::info("Fast ONU configuration completed for ONU {$onuId} with ACS/TR069 management");
     }
 
     private function fastConfigureOnuSteps($connection, $request, $onuId, $vlanInfo)
@@ -1100,12 +1116,16 @@ class OltController extends Controller
             'gemport 1 name PPPoE tcont 1',
             'gemport 1 traffic-limit upstream UP1000MBPS downstream DW1000MBPS',
             "service-port 1 vport 1 user-vlan {$vlan} vlan {$vlan}",
-            'port-identification format DSL-FORUM-PON sport 1',
-            'pppoe-intermediate-agent enable sport 1',
+            "service-port 2 vport 1 user-vlan 100 vlan 100",
             'exit',
             "pon-onu-mng gpon-onu_1/{$card}/{$port}:{$onuId}",
             "service PPPoE gemport 1 vlan {$vlan}",
+            "service ACS gemport 1 vlan 100",
             "wan-ip 1 mode pppoe username {$pppoeUsername} password {$pppoePassword} vlan-profile {$vlanProfile} host 1",
+            'vlan port veip_1 mode hybrid',
+            'tr069-mgmt 1 state unlock',
+            'tr069-mgmt 1 acs http://10.133.254.2:7547 validate basic username fansnetwork password acsfans',
+            'tr069-mgmt 1 tag pri 0 vlan 100',
             'wan-ip 1 ping-response enable traceroute-response enable',
             'security-mgmt 1 state enable mode forward protocol web',
             'end',
@@ -1118,7 +1138,7 @@ class OltController extends Controller
             $this->executeCommand($connection, $command, $isLastCommand);
         }
         
-        Log::info("Ultra-fast ONU configuration completed for ONU {$onuId}");
+        Log::info("Ultra-fast ONU configuration completed for ONU {$onuId} with ACS/TR069 management");
     }
 
     private function executeBatchCommands($connection, $commands)

@@ -1,17 +1,15 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>OLT ZTE C320 Management</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<x-admin-layout>
+    <x-slot name="header">
+        <h2 class="h4 font-weight-bold text-gray-800 mb-0">
+            <i class="fas fa-network-wired me-2"></i>OLT ZTE C320 Management
+        </h2>
+        <div class="d-flex align-items-center">
+            <span class="status-indicator status-online"></span>
+            <span class="text-muted">Connected to 10.22.4.254</span>
+        </div>
+    </x-slot>
+
     <style>
-        .card {
-            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-            border: 1px solid rgba(0, 0, 0, 0.125);
-        }
         .btn-custom {
             background: linear-gradient(45deg, #007bff, #0056b3);
             border: none;
@@ -42,270 +40,252 @@
             overflow-y: auto;
         }
     </style>
-</head>
-<body class="bg-light">
-    <div class="container-fluid py-4">
-        <div class="row">
-            <div class="col-12">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h1 class="h3 text-primary">
-                        <i class="fas fa-network-wired me-2"></i>
-                        OLT Management Fans Media
-                    </h1>
-                    <div class="d-flex align-items-center">
-                        <span class="status-indicator status-online"></span>
-                        <span class="text-muted">Connected to Fans Net</span>
+
+    <div class="row">
+        <!-- Unconfigured ONUs Panel -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Unconfigured ONUs
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <button class="btn btn-custom btn-sm mb-3" onclick="getUnconfiguredOnus()">
+                        <i class="fas fa-sync-alt me-1"></i>
+                        Refresh
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm mb-3 ms-2" onclick="debugRawOutput()">
+                        <i class="fas fa-bug me-1"></i>
+                        Debug Raw
+                    </button>
+                    <div class="loading text-center" id="uncfg-loading">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>ONU Index</th>
+                                    <th>Port</th>
+                                    <th>Serial Number</th>
+                                    <th>State</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="unconfigured-onus">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">
+                                        Click refresh to load unconfigured ONUs
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="row">
-            <!-- Unconfigured ONUs Panel -->
-            <div class="col-md-6 mb-4">
-                <div class="card">
-                    <div class="card-header bg-warning text-dark">
-                        <h5 class="card-title mb-0">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            Unconfigured ONUs
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <button class="btn btn-custom btn-sm mb-3" onclick="getUnconfiguredOnus()">
-                            <i class="fas fa-sync-alt me-1"></i>
-                            Refresh
-                        </button>
-                        <button class="btn btn-outline-secondary btn-sm mb-3 ms-2" onclick="debugRawOutput()">
-                            <i class="fas fa-bug me-1"></i>
-                            Debug Raw
-                        </button>
-                        <div class="loading text-center" id="uncfg-loading">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-striped table-hover">
-                                <thead class="table-dark">
-                                    <tr>
-                                        <th>ONU Index</th>
-                                        <th>Port</th>
-                                        <th>Serial Number</th>
-                                        <th>State</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="unconfigured-onus">
-                                    <tr>
-                                        <td colspan="5" class="text-center text-muted">
-                                            Click refresh to load unconfigured ONUs
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+        <!-- Configuration Panel -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-cog me-2"></i>
+                        ONU Configuration
+                    </h5>
                 </div>
-            </div>
-
-            <!-- Configuration Panel -->
-            <div class="col-md-6 mb-4">
-                <div class="card">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="card-title mb-0">
-                            <i class="fas fa-cog me-2"></i>
-                            ONU Configuration
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <form id="onu-config-form">
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label for="card" class="form-label">Card</label>
-                                    <select class="form-select" id="card" name="card" required>
-                                        <option value="">Select Card</option>
-                                    </select>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="loadAvailableCards()">
-                                        <i class="fas fa-sync-alt"></i> Auto Detect
-                                    </button>
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <label for="port" class="form-label">Port</label>
-                                    <input type="number" class="form-control" id="port" name="port" required>
-                                    <div class="form-text">
-                                        Next ONU ID: <span id="next-onu-id" class="fw-bold text-primary">-</span>
-                                    </div>
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <label for="serial_number" class="form-label">Serial Number</label>
-                                    <input type="text" class="form-control" id="serial_number" name="serial_number" required>
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="name" class="form-label">Name</label>
-                                    <input type="text" class="form-control" id="name" name="name" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="description" class="form-label">Description</label>
-                                    <input type="text" class="form-control" id="description" name="description" required>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <label for="vlan_profile" class="form-label mb-0">VLAN Profile</label>
-                                    <div>
-                                        <small class="text-muted me-2" id="vlan-source">
-                                            @if(isset($vlanProfiles[array_key_first($vlanProfiles)]['source']))
-                                                Source: {{ $vlanProfiles[array_key_first($vlanProfiles)]['source'] === 'snmp' ? '🌐 SNMP' : '📝 Local' }}
-                                            @endif
-                                        </small>
-                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="refreshVlanProfiles()">
-                                            <i class="fas fa-sync-alt"></i> Refresh
-                                        </button>
-                                    </div>
-                                </div>
-                                <select class="form-select" id="vlan_profile" name="vlan_profile" required>
-                                    <option value="">Select VLAN Profile</option>
-                                    @foreach($vlanProfiles as $profile => $data)
-                                        <option value="{{ $profile }}" data-vlan="{{ $data['vlan'] }}">
-                                            {{ $profile }} (VLAN: {{ $data['vlan'] }})
-                                            @if(isset($data['source']) && $data['source'] === 'snmp')
-                                                🌐
-                                            @endif
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="pppoe_username" class="form-label">PPPoE Username</label>
-                                    <input type="text" class="form-control" id="pppoe_username" name="pppoe_username" required>
-                                    <div class="form-text">
-                                        <small class="text-muted">
-                                            <i class="fas fa-info-circle"></i> 
-                                            Input username sesuai kebutuhan (tidak menggunakan format otomatis)
-                                        </small>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="pppoe_password" class="form-label">PPPoE Password</label>
-                                    <input type="text" class="form-control" id="pppoe_password" name="pppoe_password" required>
-                                </div>
-                            </div>
-
-                            <div class="alert alert-info">
-                                <h6><i class="fas fa-cog me-2"></i>Configuration Features:</h6>
-                                <ul class="mb-0 small">
-                                    <li><strong>Dual VLAN:</strong> Service VLAN ({profile}) + Default VLAN 100 for ACS</li>
-                                    <li><strong>TR069/ACS:</strong> Auto-configured for remote management</li>
-                                    <li><strong>Username:</strong> Manual input (no auto-format)</li>
-                                    <li><strong>VEIP Mode:</strong> Hybrid mode for advanced features</li>
-                                </ul>
-                            </div>
-
-                            <div class="d-grid gap-2">
-                                <button type="submit" class="btn btn-custom btn-lg">
-                                    <i class="fas fa-save me-2"></i>
-                                    Configure ONU
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Delete ONU Panel -->
-        <div class="row">
-            <div class="col-12 mb-4">
-                <div class="card">
-                    <div class="card-header bg-danger text-white">
-                        <h5 class="card-title mb-0">
-                            <i class="fas fa-trash me-2"></i>
-                            Delete ONU Management
-                        </h5>
-                    </div>
-                    <div class="card-body">
+                <div class="card-body">
+                    <form id="onu-config-form">
                         <div class="row">
                             <div class="col-md-4 mb-3">
-                                <label for="delete-card" class="form-label">Card</label>
-                                <select class="form-select" id="delete-card">
-                                    <option value="1">Card 1 </option>
-                                    <option value="2">Card 2 </option>
-                                    <option value="3">Card 3 </option>
+                                <label for="card" class="form-label">Card</label>
+                                <select class="form-select" id="card" name="card" required>
+                                    <option value="">Select Card</option>
                                 </select>
+                                <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="loadAvailableCards()">
+                                    <i class="fas fa-sync-alt"></i> Auto Detect
+                                </button>
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label for="delete-port" class="form-label">Port</label>
-                                <input type="number" class="form-control" id="delete-port" placeholder="Masukkan port">
+                                <label for="port" class="form-label">Port</label>
+                                <input type="number" class="form-control" id="port" name="port" required>
+                                <div class="form-text">
+                                    Next ONU ID: <span id="next-onu-id" class="fw-bold text-primary">-</span>
+                                </div>
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label class="form-label">&nbsp;</label>
+                                <label for="serial_number" class="form-label">Serial Number</label>
+                                <input type="text" class="form-control" id="serial_number" name="serial_number" required>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="name" class="form-label">Name</label>
+                                <input type="text" class="form-control" id="name" name="name" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="description" class="form-label">Description</label>
+                                <input type="text" class="form-control" id="description" name="description" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label for="vlan_profile" class="form-label mb-0">VLAN Profile</label>
                                 <div>
-                                    <button class="btn btn-outline-secondary" onclick="getConfiguredOnus()">
-                                        <i class="fas fa-search"></i> Cek ONU
+                                    <small class="text-muted me-2" id="vlan-source">
+                                        @if(isset($vlanProfiles[array_key_first($vlanProfiles)]['source']))
+                                            Source: {{ $vlanProfiles[array_key_first($vlanProfiles)]['source'] === 'snmp' ? '🌐 SNMP' : '📝 Local' }}
+                                        @endif
+                                    </small>
+                                    <button type="button" class="btn btn-sm btn-outline-info" onclick="refreshVlanProfiles()">
+                                        <i class="fas fa-sync-alt"></i> Refresh
                                     </button>
                                 </div>
                             </div>
+                            <select class="form-select" id="vlan_profile" name="vlan_profile" required>
+                                <option value="">Select VLAN Profile</option>
+                                @foreach($vlanProfiles as $profile => $data)
+                                    <option value="{{ $profile }}" data-vlan="{{ $data['vlan'] }}">
+                                        {{ $profile }} (VLAN: {{ $data['vlan'] }})
+                                        @if(isset($data['source']) && $data['source'] === 'snmp')
+                                            🌐
+                                        @endif
+                                    </option>
+                                @endforeach
+                            </select>
                         </div>
-                        
-                        <div class="loading text-center" id="configured-loading" style="display: none;">
-                            <div class="spinner-border text-danger" role="status">
-                                <span class="visually-hidden">Loading...</span>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="pppoe_username" class="form-label">PPPoE Username</label>
+                                <input type="text" class="form-control" id="pppoe_username" name="pppoe_username" required>
+                                <div class="form-text">
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle"></i> 
+                                        Input username sesuai kebutuhan (tidak menggunakan format otomatis)
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="pppoe_password" class="form-label">PPPoE Password</label>
+                                <input type="text" class="form-control" id="pppoe_password" name="pppoe_password" required>
                             </div>
                         </div>
-                        
-                        <div class="table-responsive">
-                            <table class="table table-striped table-hover">
-                                <thead class="table-dark">
-                                    <tr>
-                                        <th>Card</th>
-                                        <th>Port</th>
-                                        <th>ONU ID</th>
-                                        <th>Type</th>
-                                        <th>Serial Number</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="configured-onus">
-                                    <tr>
-                                        <td colspan="6" class="text-center text-muted">
-                                            Pilih card dan masukkan port, lalu klik "Cek ONU" untuk melihat ONU yang terkonfigurasi
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-cog me-2"></i>Configuration Features:</h6>
+                            <ul class="mb-0 small">
+                                <li><strong>Dual VLAN:</strong> Service VLAN ({profile}) + Default VLAN 100 for ACS</li>
+                                <li><strong>TR069/ACS:</strong> Auto-configured for remote management</li>
+                                <li><strong>Username:</strong> Manual input (no auto-format)</li>
+                                <li><strong>VEIP Mode:</strong> Hybrid mode for advanced features</li>
+                            </ul>
                         </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-custom btn-lg">
+                                <i class="fas fa-save me-2"></i>
+                                Configure ONU
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete ONU Panel -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-trash me-2"></i>
+                        Delete ONU Management
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="delete-card" class="form-label">Card</label>
+                            <select class="form-select" id="delete-card">
+                                <option value="1">Card 1 </option>
+                                <option value="2">Card 2 </option>
+                                <option value="3">Card 3 </option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="delete-port" class="form-label">Port</label>
+                            <input type="number" class="form-control" id="delete-port" placeholder="Masukkan port">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">&nbsp;</label>
+                            <div>
+                                <button class="btn btn-outline-secondary" onclick="getConfiguredOnus()">
+                                    <i class="fas fa-search"></i> Cek ONU
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="loading text-center" id="configured-loading" style="display: none;">
+                        <div class="spinner-border text-danger" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Card</th>
+                                    <th>Port</th>
+                                    <th>ONU ID</th>
+                                    <th>Type</th>
+                                    <th>Serial Number</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="configured-onus">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">
+                                        Pilih card dan masukkan port, lalu klik "Cek ONU" untuk melihat ONU yang terkonfigurasi
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Status Panel -->
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header bg-info text-white">
-                        <h5 class="card-title mb-0">
-                            <i class="fas fa-info-circle me-2"></i>
-                            Configuration Status
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="status-messages">
-                            <p class="text-muted mb-0">
-                                <i class="fas fa-rocket text-info"></i> 
-                                Ready to configure ONUs with optimized speed...
-                            </p>
-                            <small class="text-muted">
-                                <i class="fas fa-bolt"></i> 
-                                Fast mode enabled - Reduced timeouts and batch processing
-                            </small>
-                        </div>
+    <!-- Status Panel -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Configuration Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="status-messages">
+                        <p class="text-muted mb-0">
+                            <i class="fas fa-rocket text-info"></i> 
+                            Ready to configure ONUs with optimized speed...
+                        </p>
+                        <small class="text-muted">
+                            <i class="fas fa-bolt"></i> 
+                            Fast mode enabled - Reduced timeouts and batch processing
+                        </small>
                     </div>
                 </div>
             </div>
@@ -332,7 +312,6 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Set CSRF token for AJAX requests
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -911,5 +890,4 @@
             loadAvailableCards();
         });
     </script>
-</body>
-</html>
+</x-admin-layout>

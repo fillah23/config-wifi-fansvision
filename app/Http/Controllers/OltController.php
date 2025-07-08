@@ -7,6 +7,10 @@ use Illuminate\Support\Facades\Log;
 
 class OltController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth');
+    }
     
 
     // SNMP Configuration for OLT - now using config file
@@ -42,7 +46,7 @@ class OltController extends Controller
         // Get VLAN profiles from OLT via SNMP (with fallback to hardcoded)
         $vlanProfiles = $this->getVlanProfilesFromSnmp();
         
-        return view('olt.index', [
+        return view('olt.olt-management', [
             'vlanProfiles' => $vlanProfiles
         ]);
     }
@@ -810,7 +814,7 @@ class OltController extends Controller
 
     private function connectToOlt()
     {
-        $connection = fsockopen('10.22.4.254', 23, $errno, $errstr, 5); // Reduced timeout to 5 seconds
+        $connection = fsockopen('103.63.26.233', 301, $errno, $errstr, 5); // Reduced timeout to 5 seconds
         if (!$connection) {
             throw new \Exception("Tidak dapat terhubung ke OLT: $errstr ($errno)");
         }

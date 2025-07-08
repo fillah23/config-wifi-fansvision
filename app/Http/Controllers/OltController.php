@@ -32,6 +32,10 @@ class OltController extends Controller
     // Cache for VLAN profiles to avoid frequent SNMP queries
     private $vlanProfilesCache = null;
     private $cacheExpiry = null;
+    
+    // Cache for card information
+    private $cardsCache = null;
+    private $cardsCacheExpiry = null;
 
     public function index()
     {
@@ -258,7 +262,7 @@ class OltController extends Controller
     public function getConfiguredOnus(Request $request)
     {
         $port = $request->input('port');
-        $card = $request->input('card', 2); // Default to card 2
+        $card = $request->input('card', 3); // Default to card 2
         
         try {
             $connection = $this->connectToOlt();
@@ -280,17 +284,28 @@ class OltController extends Controller
     public function getAvailableCards(Request $request)
     {
         try {
-            $connection = $this->connectToOlt();
-            if (!$connection) {
-                return response()->json(['error' => 'Tidak dapat terhubung ke OLT'], 500);
+            // Get cards from unconfigured ONUs
+            $cards = $this->getCardsFromOnuData();
+            
+            // If no cards found from ONU data, use fallback methods
+            if (empty($cards)) {
+                Log::info('No cards found from ONU data, trying SNMP and telnet fallback');
+                
+                // Try SNMP first
+                $cards = $this->getCardsFromSnmp();
+                
+                // If SNMP fails, fallback to telnet
+                if (empty($cards)) {
+                    Log::warning('SNMP card detection failed, falling back to telnet');
+                    $cards = $this->getCardsFromTelnet();
+                }
             }
-
-            // Get available cards using show card command
-            $result = $this->executeCommand($connection, 'show card');
-            fclose($connection);
-
-            $cards = $this->parseAvailableCards($result);
-            return response()->json(['cards' => $cards]);
+            
+            return response()->json([
+                'cards' => $cards,
+                'source' => empty($cards) ? 'none' : (count($cards) > 0 && isset($cards[0]['source']) ? $cards[0]['source'] : 'onu_data'),
+                'cached' => false
+            ]);
         } catch (\Exception $e) {
             Log::error('Error getting available cards: ' . $e->getMessage());
             return response()->json(['error' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
@@ -482,6 +497,224 @@ class OltController extends Controller
     }
 
     /**
+     * Get cards information from OLT via SNMP
+     */
+    private function getCardsFromSnmp()
+    {
+        try {
+            Log::info('Fetching cards from OLT via SNMP');
+
+            $snmpConfig = $this->getSnmpConfig();
+            $oids = $this->getSnmpOids();
+
+            $snmp = new \FreeDSx\Snmp\SnmpClient([
+                'host' => $snmpConfig['host'],
+                'community' => $snmpConfig['community'],
+                'version' => $snmpConfig['version'],
+                'timeout' => $snmpConfig['timeout'],
+                'retries' => $snmpConfig['retries']
+            ]);
+
+            $cards = [];
+
+            // Try to walk card status first
+            try {
+                $cardStatuses = $snmp->walk($oids['card_status']);
+                $cardTypes = [];
+                
+                // Try to get card types
+                try {
+                    $cardTypes = $snmp->walk($oids['card_type']);
+                } catch (\Exception $e) {
+                    Log::debug('Could not get card types via SNMP: ' . $e->getMessage());
+                }
+
+                foreach ($cardStatuses as $oid => $status) {
+                    $cardIndex = $this->extractCardIndexFromOid($oid);
+                    $statusValue = (int) $status->getValue();
+                    
+                    // Parse card index (usually in format slot.card)
+                    $cardParts = explode('.', $cardIndex);
+                    if (count($cardParts) >= 2) {
+                        $slot = $cardParts[0];
+                        $card = $cardParts[1];
+                        
+                        // Find corresponding card type
+                        $cardType = 'Unknown';
+                        foreach ($cardTypes as $typeOid => $type) {
+                            if ($this->extractCardIndexFromOid($typeOid) === $cardIndex) {
+                                $cardType = (string) $type->getValue();
+                                break;
+                            }
+                        }
+
+                        // Only include working/active cards (status 1 or 2)
+                        if ($statusValue === 1 || $statusValue === 2) {
+                            $cards[] = [
+                                'slot' => $slot,
+                                'card' => $card,
+                                'full_id' => "{$slot}/{$card}",
+                                'status' => $this->getCardStatusText($statusValue),
+                                'type' => $cardType,
+                                'source' => 'snmp'
+                            ];
+                        }
+                    }
+                }
+
+                Log::info('Successfully fetched ' . count($cards) . ' cards via SNMP');
+
+            } catch (\Exception $e) {
+                Log::warning('SNMP card walk failed, trying alternative OIDs: ' . $e->getMessage());
+                
+                // Try alternative card detection
+                $cards = $this->getCardsFromSnmpAlternative($snmp);
+            }
+
+            return $cards;
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching cards via SNMP: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Alternative SNMP card detection method
+     */
+    private function getCardsFromSnmpAlternative($snmp)
+    {
+        $cards = [];
+        $oids = $this->getSnmpOids();
+        
+        try {
+            // Try GPON card specific OID
+            if (isset($oids['gpon_card_status'])) {
+                $gponCards = $snmp->walk($oids['gpon_card_status']);
+                
+                foreach ($gponCards as $oid => $status) {
+                    $cardIndex = $this->extractCardIndexFromOid($oid);
+                    $statusValue = (int) $status->getValue();
+                    
+                    if ($statusValue === 1) { // Active
+                        $cards[] = [
+                            'slot' => '1',
+                            'card' => $cardIndex,
+                            'full_id' => "1/{$cardIndex}",
+                            'status' => 'Working',
+                            'type' => 'GPON',
+                            'source' => 'snmp_alt'
+                        ];
+                    }
+                }
+            }
+            
+            // If still no cards, try individual gets for known slots
+            if (empty($cards)) {
+                $knownSlots = ['1.2', '1.3', '1.4', '1.5', '1.6', '1.7', '1.8'];
+                foreach ($knownSlots as $slotCard) {
+                    try {
+                        $result = $snmp->get($oids['card_status'] . '.' . $slotCard);
+                        if ($result && (int) $result->getValue() === 1) {
+                            $parts = explode('.', $slotCard);
+                            $cards[] = [
+                                'slot' => $parts[0],
+                                'card' => $parts[1],
+                                'full_id' => implode('/', $parts),
+                                'status' => 'Working',
+                                'type' => 'GPON',
+                                'source' => 'snmp_individual'
+                            ];
+                        }
+                    } catch (\Exception $e) {
+                        Log::debug("Failed to get card {$slotCard}: " . $e->getMessage());
+                    }
+                }
+            }
+
+        } catch (\Exception $e) {
+            Log::debug('Alternative SNMP card detection failed: ' . $e->getMessage());
+        }
+
+        return $cards;
+    }
+
+    /**
+     * Get cards from telnet as fallback
+     */
+    private function getCardsFromTelnet()
+    {
+        try {
+            $connection = $this->connectToOlt();
+            if (!$connection) {
+                Log::warning('Cannot connect to OLT for telnet card detection');
+                return $this->getDefaultCards();
+            }
+
+            // Get available cards using show card command
+            $result = $this->executeCommand($connection, 'show card');
+            fclose($connection);
+
+            $cards = $this->parseAvailableCards($result);
+            
+            // Mark as telnet source
+            foreach ($cards as &$card) {
+                $card['source'] = 'telnet';
+            }
+            
+            return $cards;
+        } catch (\Exception $e) {
+            Log::error('Error getting cards via telnet: ' . $e->getMessage());
+            return $this->getDefaultCards();
+        }
+    }
+
+    /**
+     * Get default cards when all detection methods fail
+     */
+    private function getDefaultCards()
+    {
+        return [
+            [
+                'slot' => '1',
+                'card' => '2',
+                'full_id' => '1/2',
+                'status' => 'Default',
+                'type' => 'GPON',
+                'source' => 'default'
+            ]
+        ];
+    }
+
+    /**
+     * Extract card index from SNMP OID
+     */
+    private function extractCardIndexFromOid($oid)
+    {
+        $parts = explode('.', $oid);
+        // Get last two parts for slot.card format
+        if (count($parts) >= 2) {
+            return $parts[count($parts) - 2] . '.' . $parts[count($parts) - 1];
+        }
+        return end($parts);
+    }
+
+    /**
+     * Convert card status number to text
+     */
+    private function getCardStatusText($status)
+    {
+        switch ($status) {
+            case 1: return 'Working';
+            case 2: return 'Active';
+            case 3: return 'Standby';
+            case 4: return 'Failed';
+            case 5: return 'Offline';
+            default: return 'Unknown';
+        }
+    }
+
+    /**
      * Refresh VLAN profiles from OLT
      */
     public function refreshVlanProfiles(Request $request)
@@ -531,6 +764,46 @@ class OltController extends Controller
             Log::error('Error getting VLAN profiles: ' . $e->getMessage());
             return response()->json([
                 'error' => 'Failed to get VLAN profiles: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Refresh cards from OLT
+     */
+    public function refreshCards(Request $request)
+    {
+        try {
+            // Clear cache
+            $this->cardsCache = null;
+            $this->cardsCacheExpiry = null;
+
+            // Get fresh cards
+            $cards = $this->getCardsFromSnmp();
+            
+            // If SNMP fails, try telnet
+            if (empty($cards)) {
+                $cards = $this->getCardsFromTelnet();
+            }
+
+            // Cache the results
+            if (!empty($cards)) {
+                $this->cardsCache = $cards;
+                $this->cardsCacheExpiry = time() + config('olt_snmp.cache.lifetime', 300);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cards refreshed successfully',
+                'cards' => $cards,
+                'count' => count($cards),
+                'source' => isset($cards[0]['source']) ? $cards[0]['source'] : 'unknown'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error refreshing cards: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to refresh cards: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -987,5 +1260,65 @@ class OltController extends Controller
         }
         
         return $cards;
+    }
+
+    /**
+     * Get available cards from ONU data
+     */
+    private function getCardsFromOnuData()
+    {
+        try {
+            Log::info('Getting cards from ONU data');
+            
+            $connection = $this->connectToOlt();
+            if (!$connection) {
+                Log::warning('Cannot connect to OLT for ONU data');
+                return [];
+            }
+
+            $result = $this->executeCommand($connection, 'show gpon onu uncfg');
+            fclose($connection);
+
+            // Clean and parse the output
+            $cleanResult = $this->sanitizeOutput($result);
+            $onus = $this->parseUnconfiguredOnus($cleanResult);
+            
+            // Extract unique cards from ONU data
+            $cardSet = [];
+            foreach ($onus as $onu) {
+                if (isset($onu['card']) && isset($onu['slot'])) {
+                    $cardKey = $onu['slot'] . '/' . $onu['card'];
+                    $cardSet[$cardKey] = [
+                        'slot' => $onu['slot'],
+                        'card' => $onu['card'],
+                        'full_id' => $cardKey,
+                        'status' => 'Active (has ONUs)',
+                        'source' => 'onu_data'
+                    ];
+                }
+            }
+            
+            $cards = array_values($cardSet);
+            
+            // If no cards found from ONU data, add default card 3
+            if (empty($cards)) {
+                Log::info('No cards found from ONU data, adding default card 3');
+                $cards[] = [
+                    'slot' => '1',
+                    'card' => '3',
+                    'full_id' => '1/3',
+                    'status' => 'Default',
+                    'source' => 'default'
+                ];
+            }
+            
+            Log::info('Found ' . count($cards) . ' cards from ONU data: ' . implode(', ', array_column($cards, 'full_id')));
+            
+            return $cards;
+            
+        } catch (\Exception $e) {
+            Log::error('Error getting cards from ONU data: ' . $e->getMessage());
+            return [];
+        }
     }
 }

@@ -335,7 +335,7 @@
 
         // Auto-detect cards on page load
         function loadAvailableCards() {
-            fetch('/olt/available-cards', {
+            return fetch('/olt/available-cards', {
                 method: 'GET',
                 headers: {
                     'X-CSRF-TOKEN': csrfToken,
@@ -358,10 +358,11 @@
                 
                 // Add detected cards
                 data.cards.forEach(card => {
-                    const option = new Option(`Card ${card.card} (${card.full_id}) - ${card.status}`, card.card);
+                    const sourceIcon = getCardSourceIcon(card.source);
+                    const option = new Option(`${sourceIcon} Card ${card.card} (${card.full_id}) - ${card.status}`, card.card);
                     cardSelect.add(option);
                     
-                    const deleteOption = new Option(`Card ${card.card} (${card.full_id}) - ${card.status}`, card.card);
+                    const deleteOption = new Option(`${sourceIcon} Card ${card.card} (${card.full_id}) - ${card.status}`, card.card);
                     deleteCardSelect.add(deleteOption);
                 });
                 
@@ -371,11 +372,37 @@
                     deleteCardSelect.value = data.cards[0].card;
                 }
                 
-                showStatus(`Detected ${data.cards.length} available cards`, 'success');
+                const sourceText = getCardSourceText(data.source);
+                showStatus(`${sourceText} Detected ${data.cards.length} available cards`, 'success');
+                
+                return data.cards; // Return cards for promise chain
             })
             .catch(error => {
                 showStatus('Error loading cards: ' + error.message, 'danger');
+                throw error; // Re-throw for promise chain
             });
+        }
+        
+        // Get source icon for card
+        function getCardSourceIcon(source) {
+            switch(source) {
+                case 'onu_data': return '📡';
+                case 'snmp': return '🌐';
+                case 'telnet': return '📞';
+                case 'default': return '📝';
+                default: return '❓';
+            }
+        }
+        
+        // Get source text for card
+        function getCardSourceText(source) {
+            switch(source) {
+                case 'onu_data': return '📡 ONU Data:';
+                case 'snmp': return '🌐 SNMP:';
+                case 'telnet': return '📞 Telnet:';
+                case 'default': return '📝 Default:';
+                default: return '❓ Unknown:';
+            }
         }
 
         // Get port info when card or port changes
@@ -796,19 +823,25 @@
             document.getElementById('port').value = port;
             document.getElementById('serial_number').value = serialNumber;
             
-            // If card is provided, set it, otherwise use the currently selected card
-            if (card) {
-                document.getElementById('card').value = card;
-            } else if (!document.getElementById('card').value) {
-                // If no card selected, try to detect or use default
-                loadAvailableCards();
-            }
-            
-            // Update port info to get next ONU ID
-            updatePortInfo();
+            // Auto-load available cards first
+            loadAvailableCards().then(() => {
+                // If card is provided, set it after cards are loaded
+                if (card) {
+                    document.getElementById('card').value = card;
+                    // Update port info to get next ONU ID
+                    updatePortInfo();
+                } else {
+                    // If no card provided but cards are available, use first one
+                    const cardSelect = document.getElementById('card');
+                    if (cardSelect.options.length > 1) {
+                        cardSelect.selectedIndex = 1; // Select first available card (skip "Select Card" option)
+                        updatePortInfo();
+                    }
+                }
+            });
             
             // Show success message
-            showStatus(`Selected ONU: Port ${port}, Serial ${serialNumber}`, 'info');
+            showStatus(`Selected ONU: Port ${port}, Serial ${serialNumber}${card ? ', Card ' + card : ''}`, 'info');
             
             // Scroll to configuration form
             document.getElementById('onu-config-form').scrollIntoView({ 

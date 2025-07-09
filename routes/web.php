@@ -19,6 +19,7 @@ Route::middleware('auth')->prefix('olt')->name('olt.')->group(function () {
     Route::get('/available-cards', [OltController::class, 'getAvailableCards']); // Get available cards
     Route::get('/unconfigured-onus', [OltController::class, 'getUnconfiguredOnus']); // Get unconfigured ONUs
     Route::post('/configured-onus', [OltController::class, 'getConfiguredOnus']); // Get configured ONUs
+    Route::post('/search-onu-by-serial', [OltController::class, 'searchOnuBySerial']); // Search ONU by Serial Number
     Route::post('/configure', [OltController::class, 'configureOnu']); // Configure ONU
     Route::post('/delete-onu', [OltController::class, 'deleteOnu']); // Delete ONU
     Route::post('/port-info-fast', [OltController::class, 'getPortInfoFast']); // Get port info (fast)

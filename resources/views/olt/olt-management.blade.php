@@ -1,4 +1,6 @@
-<x-admin-layout>
+@extends('layouts.admin')
+
+@section('content')
     <x-slot name="header">
         <h2 class="h4 font-weight-bold text-gray-800 mb-0">
             <i class="fas fa-network-wired me-2"></i>OLT ZTE C320 Management
@@ -39,13 +41,58 @@
             max-height: 400px;
             overflow-y: auto;
         }
+        
+        .search-section {
+            transition: all 0.3s ease;
+        }
+        
+        .btn-check:checked + .btn-outline-primary {
+            background-color: #007bff;
+            border-color: #007bff;
+            color: white;
+        }
+        
+        .table-warning {
+            background-color: rgba(255, 193, 7, 0.1);
+        }
+        
+        .table-warning td {
+            border-color: rgba(255, 193, 7, 0.2);
+        }
+        
+        .table-success {
+            background-color: rgba(40, 167, 69, 0.1);
+        }
+        
+        .table-success td {
+            border-color: rgba(40, 167, 69, 0.2);
+        }
+        
+        .btn-group {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 6px;
+        }
+        
+        .btn-group .btn {
+            border-radius: 0;
+        }
+        
+        .btn-group .btn:first-child {
+            border-top-left-radius: 6px;
+            border-bottom-left-radius: 6px;
+        }
+        
+        .btn-group .btn:last-child {
+            border-top-right-radius: 6px;
+            border-bottom-right-radius: 6px;
+        }
     </style>
 
     <div class="row">
         <!-- Unconfigured ONUs Panel -->
         <div class="col-md-6 mb-4">
             <div class="card">
-                <div class="card-header bg-warning text-dark">
+                <div class="card-header bg-white text-dark">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-exclamation-triangle me-2"></i>
                         Unconfigured ONUs
@@ -92,7 +139,7 @@
         <!-- Configuration Panel -->
         <div class="col-md-6 mb-4">
             <div class="card">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header bg-white text-white">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-cog me-2"></i>
                         ONU Configuration
@@ -204,32 +251,73 @@
     <div class="row">
         <div class="col-12 mb-4">
             <div class="card">
-                <div class="card-header bg-danger text-white">
+                <div class="card-header bg-white text-white">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-trash me-2"></i>
                         Delete ONU Management
                     </h5>
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label for="delete-card" class="form-label">Card</label>
-                            <select class="form-select" id="delete-card">
-                                <option value="1">Card 1 </option>
-                                <option value="2">Card 2 </option>
-                                <option value="3">Card 3 </option>
-                            </select>
+                    <!-- Search Options -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="btn-group" role="group" aria-label="Search options">
+                                <input type="radio" class="btn-check" name="search-type" id="search-by-port" value="port" checked>
+                                <label class="btn btn-outline-primary" for="search-by-port">
+                                    <i class="fas fa-ethernet me-1"></i> Cari berdasarkan Card/Port
+                                </label>
+                                
+                                <input type="radio" class="btn-check" name="search-type" id="search-by-sn" value="sn">
+                                <label class="btn btn-outline-primary" for="search-by-sn">
+                                    <i class="fas fa-barcode me-1"></i> Cari berdasarkan Serial Number
+                                </label>
+                            </div>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <label for="delete-port" class="form-label">Port</label>
-                            <input type="number" class="form-control" id="delete-port" placeholder="Masukkan port">
+                    </div>
+                    
+                    <!-- Search by Card/Port -->
+                    <div id="search-port-section" class="search-section">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="delete-card" class="form-label">Card</label>
+                                <select class="form-select" id="delete-card">
+                                    <option value="1">Card 1 </option>
+                                    <option value="2">Card 2 </option>
+                                    <option value="3">Card 3 </option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="delete-port" class="form-label">Port</label>
+                                <input type="number" class="form-control" id="delete-port" placeholder="Masukkan port">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">&nbsp;</label>
+                                <div>
+                                    <button class="btn btn-outline-secondary" onclick="getConfiguredOnus()">
+                                        <i class="fas fa-search"></i> Cek ONU
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">&nbsp;</label>
-                            <div>
-                                <button class="btn btn-outline-secondary" onclick="getConfiguredOnus()">
-                                    <i class="fas fa-search"></i> Cek ONU
-                                </button>
+                    </div>
+                    
+                    <!-- Search by Serial Number -->
+                    <div id="search-sn-section" class="search-section" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-8 mb-3">
+                                <label for="search-serial" class="form-label">Serial Number</label>
+                                <input type="text" class="form-control" id="search-serial" placeholder="Masukkan Serial Number (contoh: ZTEGC1234567)">
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle"></i> Masukkan serial number lengkap untuk pencarian
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">&nbsp;</label>
+                                <div>
+                                    <button class="btn btn-outline-secondary" onclick="searchBySerialNumber()">
+                                        <i class="fas fa-search"></i> Cari ONU
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -270,7 +358,7 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="card-header bg-info text-white">
+                <div class="card-header bg-white text-white">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-info-circle me-2"></i>
                         Configuration Status
@@ -884,10 +972,147 @@
             }
         }
 
+        // Toggle search sections
+        document.querySelectorAll('input[name="search-type"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const portSection = document.getElementById('search-port-section');
+                const snSection = document.getElementById('search-sn-section');
+                
+                if (this.value === 'port') {
+                    portSection.style.display = 'block';
+                    snSection.style.display = 'none';
+                } else {
+                    portSection.style.display = 'none';
+                    snSection.style.display = 'block';
+                }
+                
+                // Clear previous results
+                const tbody = document.getElementById('configured-onus');
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Pilih metode pencarian dan masukkan data untuk mencari ONU</td></tr>';
+            });
+        });
+
+        // Search by Serial Number
+        function searchBySerialNumber() {
+            const serialNumber = document.getElementById('search-serial').value.trim();
+            
+            if (!serialNumber) {
+                showStatus('Silakan masukkan Serial Number terlebih dahulu', 'warning');
+                return;
+            }
+            
+            const loading = document.getElementById('configured-loading');
+            const tbody = document.getElementById('configured-onus');
+            
+            loading.style.display = 'block';
+            tbody.innerHTML = '';
+            
+            // Show fast search status
+            showStatus(`� FAST SEARCH: Mencari ONU dengan Serial Number: ${serialNumber}...`, 'info');
+            
+            // Add real-time progress indicator
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center py-4">
+                        <div class="spinner-border text-primary mb-2" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <div class="fw-bold">🚀 Fast Search Mode</div>
+                        <div class="text-muted">Mencari Serial Number: <code>${serialNumber}</code></div>
+                        <div class="text-muted small">Menggunakan prioritas card untuk pencarian cepat...</div>
+                    </td>
+                </tr>
+            `;
+            
+            const startTime = Date.now();
+            console.log('Starting fast search for serial:', serialNumber);
+
+            fetch('/olt/search-onu-by-serial', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ serial_number: serialNumber })
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                const endTime = Date.now();
+                const searchTime = ((endTime - startTime) / 1000).toFixed(1);
+                
+                console.log('Fast search completed in', searchTime, 'seconds:', data);
+                loading.style.display = 'none';
+                
+                if (data.error) {
+                    showStatus(`❌ Error: ${data.error} (${searchTime}s)`, 'danger');
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error mencari ONU</td></tr>';
+                    return;
+                }
+
+                if (data.onus.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                <i class="fas fa-search fa-2x mb-2 text-muted"></i>
+                                <div>⚡ Tidak ada ONU yang ditemukan dengan Serial Number: <code>${serialNumber}</code></div>
+                                <small class="text-muted">
+                                    Pencarian selesai dalam ${searchTime}s menggunakan fast mode
+                                    ${data.cards_searched ? '(Card: ' + data.cards_searched.join(', ') + ')' : ''}
+                                </small>
+                            </td>
+                        </tr>
+                    `;
+                    showStatus(`⚡ Tidak ada ONU dengan Serial Number: ${serialNumber} (${searchTime}s)`, 'warning');
+                    return;
+                }
+
+                tbody.innerHTML = data.onus.map(onu => `
+                    <tr class="table-success">
+                        <td>${onu.card}</td>
+                        <td>${onu.port}</td>
+                        <td>${onu.onu_id}</td>
+                        <td>${onu.type}</td>
+                        <td>
+                            <code class="text-success fw-bold">${onu.serial_number}</code>
+                            <small class="text-muted d-block">Card ${onu.card}, Port ${onu.port}</small>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-danger" 
+                                    onclick="confirmDeleteOnu('${onu.card}', '${onu.port}', '${onu.onu_id}', '${onu.serial_number}')">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                showStatus(`🚀 Ditemukan ${data.onus.length} ONU dengan Serial Number: ${serialNumber} dalam ${searchTime}s (Fast Mode)`, 'success');
+            })
+            .catch(error => {
+                const endTime = Date.now();
+                const searchTime = ((endTime - startTime) / 1000).toFixed(1);
+                
+                console.error('Fast search error:', error);
+                loading.style.display = 'none';
+                showStatus(`❌ Network error: ${error.message} (${searchTime}s)`, 'danger');
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Network error</td></tr>';
+            });
+        }
+
+        // Add enter key support for serial number search
+        document.getElementById('search-serial').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchBySerialNumber();
+            }
+        });
+
         // Load unconfigured ONUs on page load and auto-detect cards
         document.addEventListener('DOMContentLoaded', function() {
             getUnconfiguredOnus();
             loadAvailableCards();
         });
     </script>
-</x-admin-layout>
+@endsection

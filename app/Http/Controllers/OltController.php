@@ -285,6 +285,104 @@ class OltController extends Controller
         }
     }
 
+    public function searchOnuBySerial(Request $request)
+    {
+        $serialNumber = $request->input('serial_number');
+        
+        if (empty($serialNumber)) {
+            return response()->json(['error' => 'Serial number tidak boleh kosong'], 400);
+        }
+        
+        try {
+            $connection = $this->connectToOlt();
+            if (!$connection) {
+                return response()->json(['error' => 'Tidak dapat terhubung ke OLT'], 500);
+            }
+
+            // Search for ONU by serial number - ULTRA FAST MODE
+            $foundOnus = [];
+            
+            // Use faster search strategy - check most common cards first
+            $priorityCards = [2, 1, 3]; // Most common cards first
+            
+            Log::info("FAST SEARCH: Looking for serial '{$serialNumber}' in priority cards: " . json_encode($priorityCards));
+            
+            foreach ($priorityCards as $card) {
+                // Use parallel-style checking for faster results
+                $cardFoundOnus = $this->searchCardForSerial($connection, $card, $serialNumber);
+                
+                if (!empty($cardFoundOnus)) {
+                    $foundOnus = array_merge($foundOnus, $cardFoundOnus);
+                    Log::info("FAST SEARCH: Found match in card {$card}, stopping search");
+                    break; // Stop on first match for speed
+                }
+            }
+            
+            // If not found in priority cards, search remaining cards
+            if (empty($foundOnus)) {
+                $remainingCards = [4, 5, 6, 7, 8];
+                foreach ($remainingCards as $card) {
+                    $cardFoundOnus = $this->searchCardForSerial($connection, $card, $serialNumber);
+                    if (!empty($cardFoundOnus)) {
+                        $foundOnus = array_merge($foundOnus, $cardFoundOnus);
+                        break; // Stop on first match
+                    }
+                }
+            }
+            
+            fclose($connection);
+            
+            Log::info("FAST SEARCH completed for serial: {$serialNumber}, found: " . count($foundOnus) . " ONUs");
+            
+            return response()->json([
+                'onus' => $foundOnus,
+                'search_term' => $serialNumber,
+                'total_found' => count($foundOnus),
+                'search_mode' => 'fast'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error searching ONU by serial: ' . $e->getMessage());
+            return response()->json(['error' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
+        }
+    }
+
+    private function searchCardForSerial($connection, $card, $serialNumber)
+    {
+        $foundOnus = [];
+        $searchSerial = strtoupper(trim($serialNumber));
+        
+        Log::info("Searching card {$card} for serial {$searchSerial}");
+        
+        // Check ports 1-16 for this card
+        for ($port = 1; $port <= 16; $port++) {
+            $command = "show run interface gpon-olt_1/{$card}/{$port}";
+            $result = $this->executeCommandFast($connection, $command);
+            
+            // Quick check - if result is empty or has "No related information", skip
+            if (empty($result) || strpos($result, 'No related information') !== false) {
+                continue;
+            }
+            
+            // Quick serial number search in raw output before parsing
+            if (stripos($result, $serialNumber) !== false) {
+                $configuredOnus = $this->parseConfiguredOnus($result, $card, $port);
+                
+                foreach ($configuredOnus as $onu) {
+                    $currentSerial = strtoupper(trim($onu['serial_number']));
+                    
+                    if ($currentSerial === $searchSerial) {
+                        $foundOnus[] = $onu;
+                        Log::info("MATCH FOUND! Card: {$card}, Port: {$port}, Serial: {$currentSerial}");
+                        return $foundOnus; // Return immediately on first match
+                    }
+                }
+            }
+        }
+        
+        return $foundOnus;
+    }
+
     public function getAvailableCards(Request $request)
     {
         try {
@@ -814,17 +912,17 @@ class OltController extends Controller
 
     private function connectToOlt()
     {
-        $connection = fsockopen('103.63.26.233', 301, $errno, $errstr, 5); // Reduced timeout to 5 seconds
+        $connection = fsockopen('103.63.26.233', 301, $errno, $errstr, 3); // Reduced to 3 seconds
         if (!$connection) {
             throw new \Exception("Tidak dapat terhubung ke OLT: $errstr ($errno)");
         }
 
-        // Set socket options for faster response
-        stream_set_timeout($connection, 3); // Reduced timeout
+        // Set socket options for ultra-fast response
+        stream_set_timeout($connection, 2); // Reduced to 2 seconds
         stream_set_blocking($connection, true);
 
-        // Faster login sequence
-        $this->readUntilPrompt($connection, 'Username:', 3);
+        // Ultra-fast login sequence
+        $this->readUntilPrompt($connection, 'Username:', 2);
         
         // Send username
         fwrite($connection, "gmdp\r\n");
@@ -838,7 +936,7 @@ class OltController extends Controller
         fflush($connection);
         
         // Wait for command prompt (#)
-        $this->readUntilPrompt($connection, '#', 3);
+        $this->readUntilPrompt($connection, '#', 2);
 
         return $connection;
     }
@@ -898,11 +996,39 @@ class OltController extends Controller
 
     private function executeCommandFast($connection, $command)
     {
-        // Ultra-fast command execution without extensive logging
+        // Ultra-fast command execution for search operations
         fwrite($connection, $command . "\r\n");
         fflush($connection);
-        usleep(30000); // Only 0.03 seconds
-        return '';
+        
+        // Very short initial wait
+        usleep(100000); // 0.1 seconds
+        
+        $result = '';
+        $timeout = 3; // Reduced timeout to 3 seconds
+        $start = time();
+        
+        while (time() - $start < $timeout) {
+            $data = fread($connection, 4096); // Read in chunks for speed
+            if ($data === false || $data === '') {
+                usleep(10000); // Very short wait - 0.01 seconds
+                continue;
+            }
+            
+            $result .= $data;
+            
+            // Quick prompt detection
+            if (strpos($result, '#') !== false && preg_match('/[#>]\s*$/', $result)) {
+                break;
+            }
+            
+            // Handle "More" prompt quickly
+            if (strpos($result, '----More----') !== false) {
+                fwrite($connection, " ");
+                fflush($connection);
+            }
+        }
+        
+        return $this->cleanTelnetOutput($result);
     }
 
     private function parseUnconfiguredOnus($output)

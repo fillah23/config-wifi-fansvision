@@ -4,6 +4,9 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\OltController;
 use App\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\SnmpController;
+
+Route::get('/snmp-read', [SnmpController::class, 'read']);
 
 Route::get('/', function () {
     return redirect()->route('login');
